@@ -29,7 +29,7 @@ fields = fieldnames(model);
 %% Constants
 
 % Runtime constants
-t0 = 0; t1 = 72; % Start and endpoints for the solver.
+t0 = 0; t1 = 96; % Start and endpoints for the solver.
 
 % Predator concentrations
 T0 = 0.1919; % See e_tuningT0 for origin of value.
@@ -40,8 +40,8 @@ N0 = zeros(9,1); % Store for intial conditions.
 N0(1) = 200; % Carbon concentration in media.
 N0(2) = 1.5; % Free cells.
 N0(3) = 0; % No intial biofilm.
-N0(4) = 0; % Initial predator S.
-N0(5) = 0; % Initial predator T.
+N0(4) = S0; % Initial predator S.
+N0(5) = T0; % Initial predator T.
 
 %% Main loop 
 

@@ -56,10 +56,6 @@ plot(timeSteps,N(:,3),'lineWidth',5); % biofilm prey.
 plot(timeSteps,N(:,4),'lineWidth',5); % free pre.
 plot(timeSteps,N(:,5),'lineWidth',5); % biofilm pred.
 
-%%
-
-N(end,3)
-
 %% saver
 
 % str = string([N(1,2),N(1,3),N(1,4),N(1,5),N(end,2),N(end,3),N(end,4),N(end,5)]);
@@ -83,11 +79,9 @@ function dNdt = odefun(~,y)
     Hpl=1; Hbf=1; Hpa=1; Ham=0.1; % Cell carbon useage hill function.
     SoV=8/2.5; % Well growth surface area:volume ratio. % /3 in model §, /2.5 in exp't §.
     gpa=0.12;gam=0.09; % predator grazing rates.
-    epa=0.5;eam=0.33; % predator growth rates.
-    chibf=0.005; chimax=0.05; chimin=0.0005; 
-    a=0.01; 
-    chipl=(a*chimax+chimin*y(3))/(a+y(3)); 
-    %chipl = (a*chimax+chimin*1000)/(a+1000); 
+    epa=0.5;eam=0.33; % predator growth rates. 
+    chibf=0.005; % biofilm detachment rate.
+    chipl = 0.0005; % Non-B dependent biofilm attachment rate.
     % Store for ODE values
     dNdt = zeros(5,1);
     % Terms
