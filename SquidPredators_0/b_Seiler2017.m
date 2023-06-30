@@ -58,7 +58,7 @@ plot(timeSteps,N(:,5),'lineWidth',5); % biofilm pred.
 
 %%
 
-N(end,3)
+N(end,2:3)
 
 %% saver
 

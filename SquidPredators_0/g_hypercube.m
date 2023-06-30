@@ -24,8 +24,6 @@ model.chibf=0.005; model.chimax=0.05; model.chimin=0.0005; model.a=0.01; % Migra
 %model.rcy1=0; model.rcy2=0; % Recycling of predator waste.
 model.SoV=8/3; % Well growth surface area:volume ratio. % /3 in model §, /2.5 in exp't §.
 
-fields = fieldnames(model);
-
 %% Constants
 
 % Runtime constants

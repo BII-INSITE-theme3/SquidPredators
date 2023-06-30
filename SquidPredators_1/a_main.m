@@ -19,6 +19,7 @@ model.gpa=0.12; model.gam=0.09; % (DEFAULT: gpa=0.12;gam=0.09;)predator grazing 
 model.epa=0.5; model.eam=0.33; % predator growth efficiency.
 model.chibf=0.005; model.chimax=0.05; model.chimin=0.0005; model.a=0.01; % Migration rates.
 model.rcy1 = 0; model.rcy2 = 0; % Efficiency of recycling of predator waste.
+model.muF = 0; model.muB = 0; model.muS = 0; model.muT = 0;
 
 %% Initial conditions
 
@@ -38,7 +39,51 @@ N0(5) = 0; % Initial predator T.
 
 [N] = solvePop(N0,t0,t1,model);
 
-%% Plotting tools
+%%
+
+%% GLS fit the model to experimental data
+
+% User input
+gammas = 1; % Values: 0 OLS, 1 WLS, other GLS % Set the LS method
+
+% Initial system guesses
+weights = ones(size(data));
+gls_optpar=init_guess;
+old_gls_optpar=init_guess;
+
+% Weight optimiser loop parameters 
+tol=1e-4; % Tolerence for data importance
+maxits = 2000; minits = 10; % Range of weight iterations 
+partol = 0.1; % Parameter change tollerence
+parchange = 100; oldparchange = 100; % Stores for old
+
+ii = 1; % Iteration number
+
+% Main solver loop
+while ii<maxits && parchange > partol && oldparchange > partol || ii< minits
+
+    % Solver inputs 
+    gls_error_estimate = @(par)gls_formulation(par,prop_data,ts,y0,weights);
+    options = optimset('MaxIter',2500,'MaxFunEvals',5000,'Display', 'Off');
+
+    % Get the parameters iteratively
+    gls_optpar = fminsearch(gls_error_estimate,gls_optpar,options);
+
+    % Quantify the quality of the new parameter estimate weighting
+    [~,weights] = ode45(@logistic,ts,y0,[],gls_optpar); 
+    weights(weights<tol) = 0;
+    weights(weights>tol) = weights(weights>tol).^(-2*gammas);
+    inds = (old_gls_optpar>1e-10);
+    weights = full(weights);
+
+    oldparchange = parchange;
+    old_gls_optpar = gls_optpar; % Store new parameter set as old for next loop
+
+    parchange = (1/2)*sum((abs(gls_optpar(inds)-old_gls_optpar(inds))./old_gls_optpar(inds)));
+    ii = ii+1; % Increase the number of iterations
+    
+
+end
 
 %% Functions
 
@@ -58,7 +103,6 @@ N0(5) = 0; % Initial predator T.
 
 % Population dynamics ODE.
 function dNdt = odefun(~,y,model)
-
 % Default parameters, from paper.
 eb=model.eb; % Carbon useage parameters.
 rpl=model.rpl; rbf=model.rbf; % Cell growth rates.
@@ -106,17 +150,18 @@ dNdt(6) = w1 + m1;
 dNdt(7) = w2 + m2; 
 dNdt(8) = w3 + m3;
 dNdt(9) = w4 + m4;
-
 end
 
 function [N] = solvePop(N0,t0,t1,model)
-
     opts = odeset('NonNegative',1:9); % Ensure all solutions are non-negative.
-
     [~,N] = ode89(@(t,y)... % Variables.
         odefun(t,y,model), ... % Function (declared at bottom of the script).
         [t0 t1], ... % Time range for which to solve.
         N0, ...  % Initial conditions.
         opts); % Extra conditions for the solver.
+end
 
+function resid = gls_formulation(par,data,T,y0,weights)
+[~,y]=ode45(@odefun,T,y0,[],par);
+resid = sum(weights.*((data-y).^2));
 end
