@@ -10,7 +10,18 @@
 % Array "fields" contains the parameter types plotted on the x-axis.
 % By modifying N0(4) and N0(5) you can change predator populations.
 
+%% Preamble
+
+close all
+
 %% Initialize model (base) parameters
+
+Ntests = 1000;
+Nparams = 16;
+imodint = 1;
+eps = 0.5;
+modifier = lhsdesign(Ntests,Nparams);
+modifier = 1 - eps*2*(modifier-0.5);
 
 model = struct; % Store for all of the parameters in the model.
 
@@ -24,7 +35,7 @@ model.chibf=0.005; model.chimax=0.05; model.chimin=0.0005; model.a=0.01; % Migra
 %model.rcy1=0; model.rcy2=0; % Recycling of predator waste.
 model.SoV=8/3; % Well growth surface area:volume ratio. % /3 in model §, /2.5 in exp't §.
 
-fields = fieldnames(model);
+fields = fieldnames(model); % List of names of the fields.
 
 %% Constants
 
@@ -40,60 +51,70 @@ N0 = zeros(9,1); % Store for intial conditions.
 N0(1) = 200; % Carbon concentration in media.
 N0(2) = 1.5; % Free cells.
 N0(3) = 0; % No intial biofilm.
-N0(4) = 0; % Initial predator S.
-N0(5) = 0; % Initial predator T.
+N0(4) = 0.05; % Initial predator S.
+N0(5) = 0.05; % Initial predator T.
 
 %% Main loop 
 
-Nruns1 = 15; % Number of loops to run
-Nruns2 = 3; % Number of loops to run
-fmod = 0.1; % Percentage modifier for parameter
-modifier = linspace(1-fmod,1+fmod,Nruns2); % Get modified parameters as normalised values
-outputs1 = zeros(Nruns1,Nruns2); % Store for the outputs
-outputs2 = zeros(Nruns1,Nruns2); % Store for the outputs
+%modifier = linspace(1/fmod,fmod,Nruns2); % Get modified parameters as normalised values
+outputs1 = zeros(Ntests,1); % Store for the outputs
+outputs2 = zeros(Ntests,1); % Store for the outputs
 
-for run1 = 1:Nruns1
-    for run2 = 1:Nruns2
+for run1 = 1:Ntests
 
-        % Set the modified parameters
-        modeltemp = model; % Store the "base" model
-        modeltemp.(fields{run1}) = modeltemp.(fields{run1})*modifier(run2); % Modify the parameter of interest
-
-        % Solve the ODE system
-        [~,~,N] = solvePop(N0,t0,t1,modeltemp); % Solve for the modified system
-
-        % Solution processing
-        outputs1(run1,run2) = N(end,2)+N(end,3); % (option 1) Total prey biomass
-        outputs2(run1,run2) = N(end,2)/N(end,3);  % (option 2) Relative prey composition
-
+    % Set the modified parameters
+    modeltemp = model; % Store the "base" model
+    for imod = 1:Nparams
+        modeltemp.(fields{imod}) = modeltemp.(fields{imod})*modifier(run1,imod); % Modify the parameter of interest
     end
+
+    % Solve the ODE system
+    [~,~,N] = solvePop(N0,t0,t1,modeltemp); % Solve for the modified system
+
+    % Solution processing
+    outputs1(run1,1) = N(end,2)+N(end,3); % (option 1) Total prey biomass
+    outputs2(run1,1) = N(end,2)/N(end,3);  % (option 2) Relative prey composition
+
 end
 
 %% Plotting tools 1 - total prey biomass
 
-plot(outputs1(:,1)./outputs1(:,2),'*','lineStyle','none')
-hold on
-plot(outputs1(:,3)./outputs1(:,2),'*','lineStyle','none')
-
-xlabel('parameter');
-ylabel('outcome relative to contol');
-lab1 = ['-' num2str(100*fmod) '%'];
-lab2 = ['-' num2str(100*fmod) '%'];
-legend(lab1,lab2);
+% plot(outputs1(:,1)./outputs1(:,2),'*','lineStyle','none')
+% hold on
+% plot(outputs1(:,3)./outputs1(:,2),'*','lineStyle','none')
+% 
+% xlabel('parameter');
+% ylabel('outcome relative to contol');
+% lab1 = ['-' num2str(100*fmod) '%'];
+% lab2 = ['+' num2str(100*fmod) '%'];
+% legend(lab1,lab2);
 
 %% Plotting tools 2 - relative prey composition
 
-hold on
-plot(outputs2(:,1),'*','lineStyle','none')
-plot(outputs2(:,2),'*','lineStyle','none')
-plot(outputs2(:,3),'*','lineStyle','none')
+% interest = ':';
+% 
+% hold on
+% plot(outputs2(interest,1),'*','lineStyle','none')
+% plot(outputs2(interest,2),'*','lineStyle','none')
+% plot(outputs2(interest,3),'*','lineStyle','none')
+% 
+% xlabel('parameter');
+% ylabel('F/B at 72hr');
+% lab1 = ['-' num2str(100*fmod) '%'];
+% lab2 = 'control';
+% lab3 = ['+' num2str(100*fmod) '%'];
+% legend(lab1,lab2,lab3);
 
-xlabel('parameter');
-ylabel('F/B at 72hr');
-lab1 = ['-' num2str(100*fmod) '%'];
-lab2 = 'control';
-lab3 = ['-' num2str(100*fmod) '%'];
-legend(lab1,lab2,lab3);
+%% LHC plot
+
+for i = 1:16
+
+    scatter(model.(fields{i})*modifier(:,i),outputs1)
+    savefig(['lhs/' fields{i} '_lhsPlot.fig'])
+    saveas(gcf,['lhs/' fields{i} '_lhsPlot.png'])
+    close all
+
+end
 
 %% ODE functions
 
