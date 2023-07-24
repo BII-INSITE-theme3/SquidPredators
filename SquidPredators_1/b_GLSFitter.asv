@@ -1,0 +1,218 @@
+%% Constants
+
+ts = [0,72]; % This array needs to be configured to match the experiment sample times.
+nparams = 31;
+
+%% Initialise the model parameter array
+% This section needs to be completed when we figure out which params are
+% and arent known.
+
+load('field.mat') % Define the order of parameters
+disp(fields(3)) % optional parameter number helper
+
+% Initial guess for unknown parameters
+paru0 = ...
+[ ...
+0.2, 1; % eb
+];
+
+% Known parameters
+park =   ...
+    [    ...
+    0.21, 2; % r_free
+    0.007, 3; % r_biol
+    1, 4; % H_free
+    1, 5; % H_biol
+    1, 6; % H_freepred
+    0.1, 7; % H_biolpred
+    8/3, 8; % SoV
+    0.12, 9; % g_free
+    0.09, 10; % g_bio
+    0.5, 11; % e_free
+    0.33, 12; % e_bio
+    0.005, 13; % chi_bf
+    0.05, 14; % chi_max
+    0.0005, 15; % chi_min
+    0.01, 16; % a
+    0, 17; % mu_F
+    0, 18; % mu_B
+    0, 19; % mu_S
+    0, 20; % mu_T
+    0, 21; % recyl1
+    0, 22; % recyl2
+    200, 23; % C0
+    1.5, 24; % F0
+    0, 25; % B0
+    0, 26; % S0
+    0, 27; % T0
+    0, 28; % WF
+    0, 29; % WB
+    0, 30; % WS
+    0, 31; % WT
+    ];
+
+% muF=par(17); 
+% muB=par(18); 
+% muS=par(19); 
+% muT=par(20); % Species mortality.
+% rcy1 = par(21); 
+% rcy2 = par(22); % Predator recycling;
+
+%% Initial conditions
+
+%% Format Data
+
+data = [2.9, 0.2];
+
+%% DO GLS
+
+% User input
+gammas = 1; % Values: 0 OLS, 1 WLS, other GLS % Set the LS method
+
+% Initial system guesses
+weights = ones(size(data));
+gls_optpar     = paru0;
+old_gls_optpar = paru0;
+
+% Weight optimiser loop parameters 
+tol=1e-4; % Tolerence for data importance
+maxits = 2000; minits = 10; % Range of weight iterations 
+partol = 0.1; % Parameter change tollerence
+parchange = 100; oldparchange = 100; % Stores for old
+
+ii = 1; % Iteration number
+
+% Main solver loop
+while ii<maxits && parchange > partol && oldparchange > partol || ii< minits
+
+    % Solver inputs 
+    gls_error_estimate = @(paru)gls_formulation(gls_optpar,park,data,ts,weights);
+    options = optimset('MaxIter',2500,'MaxFunEvals',5000,'Display', 'Off');
+
+    % Get the parameters iteratively
+    gls_optpar = fminsearch(gls_error_estimate,gls_optpar,options);
+
+    % Quantify the quality of the new parameter estimate weighting
+    par = zeros(nparams,1); % Store for the parameter array for the ODE solver
+    % Extract the parameters in the correct order
+    for i = 1:nparams
+        a = find( gls_optpar(:,2) == i ); % Look for i'th parameter in unknown param array
+        if ~isempty(a); par(i) = gls_optpar(a);          % If found, implement
+        else;           par(i) = park(park(:,2) == i,1); % If not found, implement from known param array
+        end
+    end
+
+    % Pull the initial conditions from the parameter array
+    y0 = zeros(9,1);
+    y0 = par(23:31);
+
+    [~,weightstemp] = ode45(@odefun,ts,y0,[],par); 
+    weights = weightstemp(end,2:3);
+    weights(weights<tol) = 0;
+    weights(weights>tol) = weights(weights>tol).^(-2*gammas);
+    inds = (old_gls_optpar>1e-10);
+    weights = full(weights);
+
+    oldparchange = parchange;
+    old_gls_optpar = gls_optpar; % Store new parameter set as old for next loop
+
+    parchange = (1/2)*sum((abs(gls_optpar(inds)-old_gls_optpar(inds))./old_gls_optpar(inds)));
+    ii = ii+1; % Increase the number of iterations
+
+end
+
+% Outputs
+disp('GLS Estimation')
+gls_optpar;
+
+%% Define the GLS formulation
+function resid = gls_formulation(paru,park,data,ts,weights)
+
+nparams = 31;
+par = zeros(nparams,1); % Store for the parameter array for the ODE solver
+% Extract the parameters in the correct order
+for i = 1:nparams
+    a = find( paru(:,2) == i ); % Look for i'th parameter in unknown param array
+    if ~isempty(a); par(i) = paru(a,1); % If found, implement
+    else; par(i) = park(park(:,2) == i,1); % If not found, implement from known param array
+    end
+end
+
+% Pull the initial conditions from the parameter array
+y0 = zeros(9,1);
+y0 = par(23:31);
+
+[~,N]=ode45(@odefun,ts,y0,[],par);
+y = N(end,2:3); % This is the observation process data and should be formatted to match the data structure from the experiments
+
+resid = sum(weights.*((data-y).^2));
+end
+
+%% Define the ode system
+% Defines the right-hand side of the logistic equation to be solved in
+% Population dynamics ODE.
+function dNdt = odefun(~,y,par)
+
+% Parameters for the model
+% Note: this may be subject to reordering so the unknown parameters are
+% indexed first (since this is how the par array is constructed).
+eb=par(1); % Carbon useage parameters.
+rpl=par(2); 
+rbf=par(3); % Cell growth rates.
+Hpl=par(4); 
+Hbf=par(5); 
+Hpa=par(6); 
+Ham=par(7); % Cell carbon useage hill function.
+SoV=par(8); % Well growth surface area:volume ratio. % /3 in model §, /2.5 in exp't §.
+gpa=par(9);
+gam=par(10); % (DEFAULT: gpa=0.12;gam=0.09;)predator grazing rates.
+epa=par(11);
+eam=par(12); % predator growth efficiency.
+chibf=par(13); 
+chimax=par(14); 
+chimin=par(15); 
+a=par(16); 
+chipl = (a*chimax+chimin*y(3))/(a+y(3)); % Migration rates.
+muF=par(17); 
+muB=par(18); 
+muS=par(19); 
+muT=par(20); % Species mortality.
+rcy1 = par(21); 
+rcy2 = par(22); % Predator recycling;
+
+% Store for ODE values.
+dNdt = zeros(9,1);
+
+% Standard terms
+t1 = rpl*(y(1)/(y(1)+Hpl))*y(2); % Growth of free cells.
+t2 = rbf*SoV*(y(1)/(y(1)+Hbf))*y(3); % Growth of biofilm.
+t3 = (chipl*SoV)*y(2); % free -> biofilm migration.
+t4 = chibf*(SoV*y(3)); % biofilm -> free migration.
+t5 = gpa*y(4)*y(2)/(y(2)+Hpa); % grazing of free.
+t6 = gam*y(5)*y(3)/(y(3)+Ham); % grazing of biofilm.
+
+% Waste stores
+w1 = (1/eb - 1)*(t1); % Waste prey free.
+w2 = (1/eb - 1)*(t2); % Waste prey biofilm.
+w3 = (1-epa)*t5; % Waste predator S.
+w4 = (1-eam)*t6*SoV; % Waste predator T.
+
+% Mortality stores
+m1 = muF*y(2);
+m2 = muB*y(3);
+m3 = muS*y(4);
+m4 = muT*y(5);
+
+% Calculate ODE term values
+dNdt(1) = -(1/eb)*( t1 + t2 ) + rcy1*w3 + rcy2*w4;
+dNdt(2) = t1 - t5 - t3 + t4 - m1;
+dNdt(3) = t2/SoV - t6 + t3/SoV - t4/SoV - m2;
+dNdt(4) = epa*t5 - m3;
+dNdt(5) = eam*t6 - m4;
+
+% Calculate waste ODE
+dNdt(6) = w1 + m1; 
+dNdt(7) = w2 + m2; 
+dNdt(8) = w3 + m3;
+dNdt(9) = w4 + m4;
+end
