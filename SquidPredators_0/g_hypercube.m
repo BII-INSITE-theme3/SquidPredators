@@ -72,8 +72,8 @@ for run1 = 1:Ntests
     [~,~,N] = solvePop(N0,t0,t1,modeltemp); % Solve for the modified system
 
     % Solution processing
-    outputs1(run1,1) = N(end,2)+N(end,3); % (option 1) Total prey biomass
-    outputs2(run1,1) = N(end,2)/N(end,3);  % (option 2) Relative prey composition
+    outputs1(run1) = N(end,2)+N(end,3); % (option 1) Total prey biomass
+    outputs2(run1) = N(end,2)/N(end,3);  % (option 2) Relative prey composition
 
 end
 
